@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 import { z } from 'zod';
 import { AppError } from '../../middleware/errorHandler.js';
 
@@ -92,16 +92,6 @@ export function verifyWebhookSignature(
   const toleranceMs = parsed.toleranceSeconds * 1000;
   const timeDiff = Math.abs(now.getTime() - timestamp.getTime());
 
-  // NaN fails every comparison, so an unparseable timestamp would otherwise pass the window.
-  if (Number.isNaN(timeDiff)) {
-    return {
-      isValid: false,
-      provider: parsed.provider,
-      timestamp,
-      error: 'Timestamp is not a valid date',
-    };
-  }
-
   if (timeDiff > toleranceMs) {
     return {
       isValid: false,
@@ -135,13 +125,19 @@ export function verifyWebhookSignature(
 }
 
 /**
- * Constant-time comparison of hex digests to prevent timing attacks.
- * Compares the decoded bytes, so a non-hex or wrong-length signature fails closed.
+ * Constant-time string comparison to prevent timing attacks
  */
 function constantTimeEquals(a: string, b: string): boolean {
-  const aBuf = Buffer.from(a, 'hex');
-  const bBuf = Buffer.from(b, 'hex');
-  return aBuf.length > 0 && aBuf.length === bBuf.length && timingSafeEqual(aBuf, bBuf);
+  if (a.length !== b.length) {
+    return false;
+  }
+
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+
+  return result === 0;
 }
 
 /**
